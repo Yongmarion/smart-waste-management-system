@@ -1,0 +1,1078 @@
+ "viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBin — IoT Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+  :root {
+    --bg:         #0a0d0f;
+    --surface:    #0f1418;
+    --card:       #141b21;
+    --border:     #1e2a33;
+    --accent:     #00e5ff;
+    --accent2:    #00ff88;
+    --warn:       #ffb300;
+    --danger:     #ff3b3b;
+    --text:       #c8d8e0;
+    --muted:      #4a6070;
+    --open-glow:  rgba(0,229,255,0.25);
+    --closed-glow:rgba(0,255,136,0.15);
+    --font-mono:  'Share Tech Mono', monospace;
+    --font-ui:    'Rajdhani', sans-serif;
+    --font-head:  'Exo 2', sans-serif;
+    --r: 6px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.04) 2px,
+      rgba(0,0,0,0.04) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 38px; height: 38px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .logo-icon svg { width: 100%; height: 100%; }
+
+  .logo-text {
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+    color: #fff;
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .hw-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .hw-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+
+  .hw-dot.online {
+    background: var(--accent2);
+    box-shadow: 0 0 8px var(--accent2);
+    animation: pulse-dot 2s infinite;
+  }
+
+  .hw-dot.offline { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+  @keyframes pulse-dot {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+
+  .header-time {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Simulate Button ── */
+  .btn-sim {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 7px 16px;
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .btn-sim:hover { background: var(--accent); color: #000; }
+
+  .btn-reset {
+    background: transparent;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 7px 16px;
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-reset:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Main layout ── */
+  main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 28px 32px;
+    display: grid;
+    gap: 20px;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-rows: auto;
+  }
+
+  /* ── Card base ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 22px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.3;
+  }
+
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-label::before {
+    content: '';
+    width: 3px; height: 3px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+
+  .card-value {
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: 48px;
+    line-height: 1;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+
+  .card-unit {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* ── Lid Status Card ── */
+  .lid-card {
+    grid-column: span 2;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    min-height: 160px;
+    transition: border-color 0.4s, box-shadow 0.4s;
+  }
+
+  .lid-card.lid-open {
+    border-color: var(--accent);
+    box-shadow: 0 0 30px var(--open-glow), inset 0 0 60px rgba(0,229,255,0.03);
+  }
+
+  .lid-card.lid-closed {
+    border-color: var(--accent2);
+    box-shadow: 0 0 20px var(--closed-glow);
+  }
+
+  .dustbin-visual {
+    position: relative;
+    width: 90px;
+    flex-shrink: 0;
+  }
+
+  .dustbin-visual svg { width: 100%; height: auto; overflow: visible; }
+
+  .lid-status-text {
+    flex: 1;
+  }
+
+  .lid-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 36px;
+    letter-spacing: 0.05em;
+    transition: color 0.4s;
+  }
+
+  .lid-badge.open  { color: var(--accent); }
+  .lid-badge.closed { color: var(--accent2); }
+
+  .lid-sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  /* ── Distance Card ── */
+  .dist-card { grid-column: span 1; }
+
+  .dist-bar-wrap {
+    margin-top: 12px;
+    background: var(--border);
+    border-radius: 3px;
+    height: 6px;
+    overflow: hidden;
+  }
+
+  .dist-bar {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* ── Usage Card ── */
+  .usage-card { grid-column: span 1; }
+
+  /* ── Last Updated ── */
+  .updated-card {
+    grid-column: span 2;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 22px;
+  }
+
+  .updated-icon {
+    width: 40px; height: 40px;
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.2);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .updated-info { flex: 1; }
+  .updated-ts {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text);
+  }
+  .updated-ago {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ── Alerts ── */
+  .alerts-section {
+    grid-column: span 4;
+  }
+
+  .alerts-title {
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .alerts-title::before {
+    content: '';
+    width: 16px; height: 1px;
+    background: var(--muted);
+  }
+
+  .alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .alert-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-radius: var(--r);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    animation: alert-in 0.3s ease;
+  }
+
+  @keyframes alert-in {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .alert-item.danger  { background: rgba(255,59,59,0.1); border: 1px solid rgba(255,59,59,0.3); color: #ff7070; }
+  .alert-item.warning { background: rgba(255,179,0,0.1); border: 1px solid rgba(255,179,0,0.3); color: var(--warn); }
+  .alert-item.info    { background: rgba(0,229,255,0.07); border: 1px solid rgba(0,229,255,0.2); color: var(--accent); }
+
+  .alert-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .danger .alert-dot  { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+  .warning .alert-dot { background: var(--warn);   box-shadow: 0 0 6px var(--warn); }
+  .info .alert-dot    { background: var(--accent);  box-shadow: 0 0 6px var(--accent); }
+
+  .no-alerts {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    padding: 10px 0;
+  }
+
+  /* ── Chart Section ── */
+  .chart-section {
+    grid-column: span 3;
+    min-height: 280px;
+  }
+
+  .chart-wrap {
+    margin-top: 14px;
+    position: relative;
+    height: 220px;
+  }
+
+  /* ── Analytics Panel ── */
+  .analytics-panel {
+    grid-column: span 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .stat-row {
+    display: flex;
+    flex-direction: column;
+    padding: 14px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+  }
+
+  .stat-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--accent);
+  }
+
+  /* ── Event Log ── */
+  .log-section {
+    grid-column: span 4;
+  }
+
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .log-title {
+    font-family: var(--font-head);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .log-title::before { content: ''; width: 16px; height: 1px; background: var(--muted); }
+
+  .log-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--border);
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  .log-table-wrap {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .log-table-wrap::-webkit-scrollbar { width: 6px; }
+  .log-table-wrap::-webkit-scrollbar-track { background: transparent; }
+  .log-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  thead tr {
+    background: var(--surface);
+    position: sticky; top: 0;
+    z-index: 5;
+  }
+
+  thead th {
+    padding: 10px 16px;
+    text-align: left;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 400;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(30,42,51,0.6);
+    transition: background 0.15s;
+    animation: row-in 0.25s ease;
+  }
+
+  @keyframes row-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  tbody tr:hover { background: rgba(0,229,255,0.04); }
+
+  td { padding: 10px 16px; color: var(--text); }
+
+  .event-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+
+  .event-badge.OPEN   { background: rgba(0,229,255,0.12); color: var(--accent); border: 1px solid rgba(0,229,255,0.25); }
+  .event-badge.CLOSED { background: rgba(0,255,136,0.08); color: var(--accent2); border: 1px solid rgba(0,255,136,0.2); }
+
+  .empty-log {
+    padding: 40px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── Animations for value changes ── */
+  @keyframes flash {
+    0%   { background: rgba(0,229,255,0.15); }
+    100% { background: transparent; }
+  }
+
+  .flash { animation: flash 0.6s ease; }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr 1fr; }
+    .lid-card, .alerts-section, .log-section, .chart-section { grid-column: span 2; }
+    .updated-card { grid-column: span 2; }
+    .analytics-panel { grid-column: span 2; flex-direction: row; flex-wrap: wrap; }
+    .stat-row { flex: 1; min-width: 120px; }
+  }
+
+  @media (max-width: 680px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    .lid-card, .dist-card, .usage-card, .alerts-section,
+    .log-section, .chart-section, .analytics-panel, .updated-card { grid-column: span 1; }
+    header { padding: 14px 16px; }
+    .header-time { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="9" y="14" width="20" height="20" rx="2" stroke="#00e5ff" stroke-width="1.5"/>
+        <rect x="7" y="10" width="24" height="5" rx="1.5" stroke="#00e5ff" stroke-width="1.5"/>
+        <path d="M15 10V8a1 1 0 011-1h6a1 1 0 011 1v2" stroke="#00e5ff" stroke-width="1.5"/>
+        <line x1="14" y1="19" x2="14" y2="29" stroke="#00ff88" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="19" y1="19" x2="19" y2="29" stroke="#00ff88" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="24" y1="19" x2="24" y2="29" stroke="#00ff88" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="logo-text">SMART WASTE<span> MANAGEMENT SYSTEM</span></div>
+  </div>
+
+  <div class="header-right">
+    <div class="hw-status">
+      <div class="hw-dot" id="hwDot"></div>
+      <span id="hwLabel">OFFLINE</span>
+    </div>
+    <div class="header-time" id="clock">--:--:--</div>
+    <button class="btn-sim" onclick="simulateEvent()">⚡ SIMULATE</button>
+    <button class="btn-reset" onclick="resetSystem()">↺ RESET</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+<main>
+
+  <!-- ── Lid Status ── -->
+  <div class="card lid-card lid-closed" id="lidCard">
+    <div class="dustbin-visual">
+      <svg id="binSvg" viewBox="0 0 80 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Lid (animated) -->
+        <g id="binLid" style="transform-origin:40px 22px; transition: transform 0.5s ease;">
+          <rect x="6" y="18" width="68" height="10" rx="3" fill="none" stroke="#00e5ff" stroke-width="2"/>
+          <rect x="28" y="10" width="24" height="9" rx="2" fill="none" stroke="#00e5ff" stroke-width="1.5"/>
+        </g>
+        <!-- Body -->
+        <path d="M10 28 L8 80 Q8 84 12 84 H68 Q72 84 70 80 L68 28 Z" fill="none" stroke="#00ff88" stroke-width="2"/>
+        <!-- Lines -->
+        <line x1="25" y1="38" x2="23" y2="74" stroke="#00ff88" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+        <line x1="40" y1="38" x2="40" y2="74" stroke="#00ff88" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+        <line x1="55" y1="38" x2="57" y2="74" stroke="#00ff88" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+        <!-- Sensor indicator -->
+        <circle cx="40" cy="5" r="3" fill="none" stroke="#00e5ff" stroke-width="1.5" id="sensorDot"/>
+        <circle cx="40" cy="5" r="6" fill="none" stroke="#00e5ff" stroke-width="0.8" opacity="0.3" id="sensorRing"/>
+      </svg>
+    </div>
+    <div class="lid-status-text">
+      <div class="card-label">Lid Status</div>
+      <div class="lid-badge closed" id="lidBadge">
+        <span id="lidText">CLOSED</span>
+      </div>
+      <div class="lid-sub" id="lidSub">Awaiting activation...</div>
+    </div>
+  </div>
+
+  <!-- ── Distance ── -->
+  <div class="card dist-card" id="distCard">
+    <div class="card-label">Ultrasonic Distance</div>
+    <div class="card-value" id="distValue">--</div>
+    <div class="card-unit">centimeters</div>
+    <div class="dist-bar-wrap" style="margin-top:14px;">
+      <div class="dist-bar" id="distBar" style="width:0%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;">
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">0cm</span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">50cm</span>
+    </div>
+  </div>
+
+  <!-- ── Usage Count ── -->
+  <div class="card usage-card" id="usageCard">
+    <div class="card-label">Total Usage Today</div>
+    <div class="card-value" id="usageValue" style="color:var(--accent2)">0</div>
+    <div class="card-unit">activations</div>
+  </div>
+
+  <!-- ── Last Updated ── -->
+  <div class="card updated-card">
+    <div class="updated-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+    </div>
+    <div class="updated-info">
+      <div class="card-label" style="margin-bottom:4px;">Last Data Received</div>
+      <div class="updated-ts" id="lastUpdated">No data yet</div>
+      <div class="updated-ago" id="lastUpdatedAgo">--</div>
+    </div>
+  </div>
+
+  <!-- ── Smart Alerts ── -->
+  <div class="alerts-section">
+    <div class="alerts-title">Smart Alerts</div>
+    <div class="alerts-list" id="alertsList">
+      <div class="no-alerts">No active alerts — system nominal</div>
+    </div>
+  </div>
+
+  <!-- ── Hourly Chart ── -->
+  <div class="card chart-section">
+    <div class="card-label">Hourly Activity — Today</div>
+    <div class="chart-wrap">
+      <canvas id="hourlyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Analytics Panel ── -->
+  <div class="analytics-panel">
+    <div class="stat-row">
+      <div class="stat-label">Peak Hour</div>
+      <div class="stat-value" id="peakHour">--:--</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">Peak Uses</div>
+      <div class="stat-value" id="peakCount" style="color:var(--warn)">0</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">Last Hour</div>
+      <div class="stat-value" id="lastHour" style="color:var(--accent2)">0</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">Last 5 Min</div>
+      <div class="stat-value" id="last5Min">0</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">Inactive Since</div>
+      <div class="stat-value" id="inactiveSince" style="font-size:16px;color:var(--muted)">--</div>
+    </div>
+  </div>
+
+  <!-- ── Event Log ── -->
+  <div class="log-section">
+    <div class="log-header">
+      <div class="log-title">Activity Log</div>
+      <span class="log-count" id="logCount">0 events</span>
+    </div>
+    <div class="log-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Event</th>
+            <th>Distance</th>
+            <th>Usage Count</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody id="logBody">
+          <tr><td colspan="5" class="empty-log">Waiting for hardware data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════ SCRIPTS ═══════════════════════ -->
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const API_BASE = window.location.origin; // same server serves frontend
+
+// ─── LocalStorage persistence ─────────────────────────────────────────────────
+const LS_KEY = 'smartbin_logs';
+const LS_ANALYTICS = 'smartbin_analytics';
+
+function saveLogs(logs) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(logs.slice(0, 200))); } catch(e) {}
+}
+
+function loadLogs() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; }
+}
+
+let localLogs = loadLogs();
+
+// ─── Chart setup ──────────────────────────────────────────────────────────────
+const ctx = document.getElementById('hourlyChart').getContext('2d');
+const hourlyChart = new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}:00`),
+    datasets: [{
+      label: 'Uses',
+      data: new Array(24).fill(0),
+      backgroundColor: 'rgba(0,229,255,0.2)',
+      borderColor: '#00e5ff',
+      borderWidth: 1.5,
+      borderRadius: 3,
+      hoverBackgroundColor: 'rgba(0,229,255,0.45)',
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0f1418',
+        borderColor: '#1e2a33',
+        borderWidth: 1,
+        titleColor: '#c8d8e0',
+        bodyColor: '#00e5ff',
+        titleFont: { family: 'Share Tech Mono' },
+        bodyFont:  { family: 'Share Tech Mono' },
+        callbacks: {
+          title: items => `Hour: ${items[0].label}`,
+          label: item  => `${item.raw} activation${item.raw !== 1 ? 's' : ''}`,
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(30,42,51,0.5)' },
+        ticks: {
+          color: '#4a6070',
+          font: { family: 'Share Tech Mono', size: 9 },
+          maxTicksLimit: 12,
+          maxRotation: 0,
+        }
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: 'rgba(30,42,51,0.6)' },
+        ticks: {
+          color: '#4a6070',
+          font: { family: 'Share Tech Mono', size: 10 },
+          stepSize: 1,
+        }
+      }
+    }
+  }
+});
+
+// ─── Clock ────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-US', {hour12: false});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Lid animation ────────────────────────────────────────────────────────────
+function animateLid(open) {
+  const lidEl = document.getElementById('binLid');
+  const lidCard = document.getElementById('lidCard');
+  const lidBadge = document.getElementById('lidBadge');
+  const lidText = document.getElementById('lidText');
+  const lidSub = document.getElementById('lidSub');
+  const sensorDot = document.getElementById('sensorDot');
+
+  if (open) {
+    lidEl.style.transform = 'rotate(-55deg) translateY(-8px)';
+    lidCard.classList.replace('lid-closed','lid-open');
+    lidBadge.classList.replace('closed','open');
+    lidText.textContent = 'OPEN';
+    lidSub.textContent = 'Hand detected — lid activated';
+    sensorDot.setAttribute('stroke', '#ff3b3b');
+  } else {
+    lidEl.style.transform = 'none';
+    lidCard.classList.replace('lid-open','lid-closed');
+    lidBadge.classList.replace('open','closed');
+    lidText.textContent = 'CLOSED';
+    lidSub.textContent = 'Ready for next activation';
+    sensorDot.setAttribute('stroke', '#00e5ff');
+  }
+}
+
+// ─── Flash element ────────────────────────────────────────────────────────────
+function flash(el) {
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+// ─── Format relative time ─────────────────────────────────────────────────────
+function relTime(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 5000)  return 'just now';
+  if (diff < 60000) return `${Math.floor(diff/1000)}s ago`;
+  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+  return `${Math.floor(diff/3600000)}h ago`;
+}
+
+// ─── Render log rows ──────────────────────────────────────────────────────────
+let renderedLogIds = new Set();
+
+function renderLogs(logs) {
+  const body = document.getElementById('logBody');
+  const countEl = document.getElementById('logCount');
+
+  countEl.textContent = `${logs.length} event${logs.length !== 1 ? 's' : ''}`;
+
+  if (logs.length === 0) {
+    body.innerHTML = '<tr><td colspan="5" class="empty-log">Waiting for hardware data...</td></tr>';
+    return;
+  }
+
+  // Only prepend new rows for performance
+  const newLogs = logs.filter(e => !renderedLogIds.has(e.id));
+  newLogs.forEach(e => renderedLogIds.add(e.id));
+
+  if (newLogs.length > 0 || body.querySelector('.empty-log')) {
+    body.innerHTML = '';
+    logs.slice(0, 100).forEach((e, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--muted);font-size:11px">${idx+1}</td>
+        <td><span class="event-badge ${e.type}">${e.type}</span></td>
+        <td>${e.distance} cm</td>
+        <td>${e.usageCount}</td>
+        <td>${new Date(e.timestamp).toLocaleString()}</td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+}
+
+// ─── Render alerts ────────────────────────────────────────────────────────────
+function renderAlerts(alerts) {
+  const list = document.getElementById('alertsList');
+  if (!alerts || alerts.length === 0) {
+    list.innerHTML = '<div class="no-alerts">No active alerts — system nominal</div>';
+    return;
+  }
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-item ${a.level}">
+      <div class="alert-dot"></div>
+      <span>${a.message}</span>
+    </div>
+  `).join('');
+}
+
+// ─── Update HW status indicator ───────────────────────────────────────────────
+function setHWStatus(online) {
+  const dot = document.getElementById('hwDot');
+  const lbl = document.getElementById('hwLabel');
+  dot.className = 'hw-dot ' + (online ? 'online' : 'offline');
+  lbl.textContent = online ? 'ONLINE' : 'OFFLINE';
+}
+
+// ─── Main state update ────────────────────────────────────────────────────────
+let prevUsage = -1;
+let prevLid = null;
+
+async function fetchState() {
+  try {
+    const res = await fetch(`${API_BASE}/api/state`);
+    if (!res.ok) return;
+    const state = await res.json();
+
+    setHWStatus(state.isConnected);
+
+    // Distance
+    const dist = parseFloat(state.distance);
+    const distEl = document.getElementById('distValue');
+    if (distEl.textContent !== String(dist)) {
+      distEl.textContent = isNaN(dist) ? '--' : dist.toFixed(1);
+      flash(distEl);
+    }
+    // Bar: 0-50cm range
+    const pct = Math.min(100, Math.max(0, (dist / 50) * 100));
+    document.getElementById('distBar').style.width = pct + '%';
+
+    // Lid
+    const isOpen = state.lidStatus === 'OPEN';
+    if (state.lidStatus !== prevLid) {
+      animateLid(isOpen);
+      prevLid = state.lidStatus;
+    }
+
+    // Usage
+    const usageEl = document.getElementById('usageValue');
+    if (state.usageCount !== prevUsage) {
+      usageEl.textContent = state.usageCount;
+      flash(usageEl);
+      prevUsage = state.usageCount;
+    }
+
+    // Timestamp
+    if (state.lastUpdated && state.lastUpdated !== 'No data') {
+      document.getElementById('lastUpdated').textContent =
+        new Date(state.lastUpdated).toLocaleString();
+      document.getElementById('lastUpdatedAgo').textContent =
+        relTime(state.lastUpdated);
+    }
+
+  } catch(e) { setHWStatus(false); }
+}
+
+async function fetchLogs() {
+  try {
+    const res = await fetch(`${API_BASE}/api/logs?limit=100`);
+    if (!res.ok) return;
+    const logs = await res.json();
+    if (logs.length > 0) {
+      localLogs = logs;
+      saveLogs(logs);
+    } else if (localLogs.length > 0) {
+      // Use cached logs if server returned empty (first load)
+    }
+    renderLogs(localLogs);
+  } catch(e) {}
+}
+
+async function fetchAnalytics() {
+  try {
+    const res = await fetch(`${API_BASE}/api/analytics`);
+    if (!res.ok) return;
+    const a = await res.json();
+
+    renderAlerts(a.alerts);
+
+    document.getElementById('peakHour').textContent =
+      a.peakCount > 0 ? `${String(a.peakHour).padStart(2,'0')}:00` : '--:--';
+    document.getElementById('peakCount').textContent = a.peakCount;
+    document.getElementById('lastHour').textContent = a.lastHourUsage;
+    document.getElementById('last5Min').textContent = a.last5MinUsage;
+    document.getElementById('inactiveSince').textContent =
+      a.inactiveMins !== null ? `${a.inactiveMins}m` : '--';
+
+    // Update chart
+    if (a.hourlyBreakdown) {
+      hourlyChart.data.datasets[0].data = a.hourlyBreakdown;
+      hourlyChart.update('none');
+    }
+
+  } catch(e) {}
+}
+
+// ─── Simulate event ───────────────────────────────────────────────────────────
+async function simulateEvent() {
+  try {
+    await fetch(`${API_BASE}/api/simulate`, { method: 'POST' });
+    renderedLogIds.clear();
+    setTimeout(() => { fetchState(); fetchLogs(); fetchAnalytics(); }, 300);
+    setTimeout(() => { fetchState(); fetchLogs(); }, 2500);
+  } catch(e) { alert('Backend not reachable. Start the Node.js server first.'); }
+}
+
+// ─── Reset system ─────────────────────────────────────────────────────────────
+async function resetSystem() {
+  if (!confirm('Reset all daily counters and event log?')) return;
+  try {
+    await fetch(`${API_BASE}/api/reset`, { method: 'POST' });
+    localLogs = [];
+    renderedLogIds.clear();
+    localStorage.removeItem(LS_KEY);
+    prevUsage = -1;
+    prevLid = null;
+    hourlyChart.data.datasets[0].data = new Array(24).fill(0);
+    hourlyChart.update();
+    fetchState(); fetchLogs(); fetchAnalytics();
+  } catch(e) {}
+}
+
+// ─── Polling loop ─────────────────────────────────────────────────────────────
+function poll() {
+  fetchState();
+  fetchLogs();
+  fetchAnalytics();
+}
+
+// First load: try server, fall back to localStorage
+(async () => {
+  renderLogs(localLogs);
+  await poll();
+})();
+
+// Poll every 1 second for near-real-time
+setInterval(poll, 1000);
+
+// Update "X ago" timestamps every 30s
+setInterval(() => {
+  const ts = document.getElementById('lastUpdated').textContent;
+  if (ts !== 'No data yet') {
+    try {
+      const d = new Date(ts);
+      document.getElementById('lastUpdatedAgo').textContent = relTime(d.toISOString());
+    } catch(e) {}
+  }
+}, 30000);
+</script>
+</body>
+</html>
